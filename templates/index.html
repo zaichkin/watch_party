@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watch Party</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080810;
+    --surface: #0f0f1a;
+    --border: rgba(255,255,255,0.07);
+    --accent: #e8ff47;
+    --accent2: #ff4f7b;
+    --text: #e8e8f0;
+    --muted: #6a6a80;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Animated background */
+  .bg-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.15;
+    animation: drift 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  .bg-orb.a { width: 500px; height: 500px; background: #e8ff47; top: -100px; left: -100px; }
+  .bg-orb.b { width: 400px; height: 400px; background: #ff4f7b; bottom: -80px; right: -80px; animation-delay: -6s; }
+  .bg-orb.c { width: 300px; height: 300px; background: #4f8fff; top: 40%; left: 40%; animation-delay: -3s; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(40px, 30px) scale(1.1); }
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.6;
+    z-index: 1;
+  }
+
+  .container {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 520px;
+    padding: 0 24px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(56px, 12vw, 88px);
+    letter-spacing: 0.02em;
+    line-height: 0.9;
+    margin-bottom: 8px;
+  }
+  .logo span { color: var(--accent); }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 300;
+    margin-bottom: 48px;
+    letter-spacing: 0.02em;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    backdrop-filter: blur(20px);
+  }
+
+  .label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .input-wrap {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input[type="text"]::placeholder { color: var(--muted); }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(232,255,71,0.08);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 15px;
+    background: var(--accent);
+    color: #080810;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 30px rgba(232,255,71,0.3);
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn.loading { background: var(--muted); cursor: not-allowed; }
+
+  .examples {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .example-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .example-links { display: flex; flex-wrap: wrap; gap: 6px; }
+  .example-chip {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: transparent;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .example-chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,0.05); }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .feature {
+    text-align: center;
+    padding: 16px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .feature-icon { font-size: 22px; margin-bottom: 6px; }
+  .feature-text { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  .error-msg {
+    color: var(--accent2);
+    font-size: 13px;
+    margin-top: 8px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="bg-orb a"></div>
+<div class="bg-orb b"></div>
+<div class="bg-orb c"></div>
+
+<div class="container">
+  <div class="logo">WATCH<span>PARTY</span></div>
+  <p class="tagline">Смотрите фильмы вместе — синхронно, в любой точке мира</p>
+
+  <div class="card">
+    <div class="label">Ссылка на видеопоток</div>
+    <div class="input-wrap">
+      <input type="text" id="url-input" placeholder="https://example.com/stream.m3u8" />
+    </div>
+    <p class="error-msg" id="error-msg">Введите корректную ссылку на видеопоток</p>
+    <button class="btn" id="create-btn" onclick="createRoom()">Создать комнату</button>
+
+    <div class="examples">
+      <div class="example-label">Попробовать</div>
+      <div class="example-links">
+        <button class="example-chip" onclick="setExample('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">HLS Big Buck Bunny</button>
+        <button class="example-chip" onclick="setExample('https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8')">Apple HLS Demo</button>
+        <button class="example-chip" onclick="setExample('https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8')">Shaka Demo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🔗</div>
+      <div class="feature-text">Уникальная ссылка на комнату</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⏯️</div>
+      <div class="feature-text">Синхронная пауза для всех</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">👥</div>
+      <div class="feature-text">Неограниченно зрителей</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function setExample(url) {
+  document.getElementById('url-input').value = url;
+}
+
+async function createRoom() {
+  const url = document.getElementById('url-input').value.trim();
+  const btn = document.getElementById('create-btn');
+  const err = document.getElementById('error-msg');
+
+  if (!url) { err.style.display = 'block'; return; }
+  err.style.display = 'none';
+
+  btn.textContent = 'СОЗДАЁМ...';
+  btn.classList.add('loading');
+
+  try {
+    const res = await fetch('/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stream_url: url })
+    });
+    const data = await res.json();
+    window.location.href = `/room/${data.room_id}`;
+  } catch (e) {
+    btn.textContent = 'СОЗДАТЬ КОМНАТУ';
+    btn.classList.remove('loading');
+    err.textContent = 'Ошибка сервера, попробуйте снова';
+    err.style.display = 'block';
+  }
+}
+
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') createRoom();
+});
+</script>
+</body>
+</html>
