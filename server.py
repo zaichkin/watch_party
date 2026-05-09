@@ -105,6 +105,9 @@ async def websocket_endpoint(ws: WebSocket, room_id: str):
         await ws.send_json(room.to_state())
         await broadcast(room, {"type": "viewers", "count": len(room.connections)})
 
+        # Ждём первое сообщение с именем пользователя (join)
+        viewer_name = f"Зритель {len(room.connections)}"
+
         while True:
             data = await ws.receive_json()
             msg_type = data.get("type")
@@ -133,6 +136,26 @@ async def websocket_endpoint(ws: WebSocket, room_id: str):
             elif msg_type == "ping":
                 await ws.send_json({"type": "pong"})
 
+            elif msg_type == "join":
+                viewer_name = data.get("name", viewer_name)[:30]
+                log.info(f"[{room_id}] {viewer_name} joined")
+                await broadcast(room, {
+                    "type": "join",
+                    "text": f"{viewer_name} присоединился",
+                }, exclude=ws)
+
+            elif msg_type == "chat":
+                name = data.get("name", viewer_name)[:30]
+                text = data.get("text", "").strip()[:300]
+                if text:
+                    log.info(f"[{room_id}] chat <{name}>: {text[:50]}")
+                    await broadcast(room, {
+                        "type": "chat",
+                        "name": name,
+                        "text": text,
+                        "time": data.get("time", 0),
+                    }, exclude=ws)
+
     except WebSocketDisconnect:
         pass
     except Exception as e:
@@ -142,6 +165,7 @@ async def websocket_endpoint(ws: WebSocket, room_id: str):
         count = len(room.connections)
         log.info(f"[{room_id}] viewer left  total={count}")
         await broadcast(room, {"type": "viewers", "count": count})
+        await broadcast(room, {"type": "leave", "text": f"{viewer_name} покинул комнату"})
 
 # ── Глобальный обработчик ошибок ──────────────────────────────────────────────
 
