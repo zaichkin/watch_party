@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watch Party</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080810;
+    --surface: #0f0f1a;
+    --surface2: #14141f;
+    --border: rgba(255,255,255,0.08);
+    --accent: #e8ff47;
+    --accent2: #ff4f7b;
+    --blue: #4f8fff;
+    --text: #e8e8f0;
+    --muted: #6a6a80;
+  }
+
+  body {
+    width: 360px;
+    min-height: 200px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+  }
+  .logo span { color: var(--accent); }
+
+  .header-right { display: flex; align-items: center; gap: 8px; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge.found { background: rgba(232,255,71,0.12); color: var(--accent); }
+  .badge.none  { background: rgba(106,106,128,0.15); color: var(--muted); }
+
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 7px;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .tab {
+    flex: 1;
+    padding: 9px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Content ── */
+  .panel { display: none; padding: 12px; }
+  .panel.active { display: block; }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+  .empty-title { font-size: 14px; color: var(--text); margin-bottom: 6px; }
+  .empty-text { font-size: 12px; line-height: 1.5; }
+
+  /* ── Stream list ── */
+  .stream-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .stream-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    transition: border-color 0.15s;
+  }
+  .stream-item:hover { border-color: rgba(232,255,71,0.25); }
+
+  .stream-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .stream-type {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .type-HLS  { background: rgba(232,255,71,0.12); color: var(--accent); }
+  .type-DASH { background: rgba(79,143,255,0.12); color: var(--blue); }
+  .type-MP4  { background: rgba(255,79,123,0.12); color: var(--accent2); }
+  .type-WebM { background: rgba(79,143,255,0.12); color: var(--blue); }
+  .type-Stream { background: rgba(106,106,128,0.15); color: var(--muted); }
+
+  .stream-time {
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .stream-url {
+    font-size: 11px;
+    color: var(--muted);
+    word-break: break-all;
+    line-height: 1.4;
+    margin-bottom: 8px;
+    max-height: 44px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+  }
+
+  .stream-actions { display: flex; gap: 6px; }
+
+  .btn-sm {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    font-weight: 500;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #080810;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { box-shadow: 0 3px 12px rgba(232,255,71,0.3); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+  }
+  .btn-secondary:hover { border-color: var(--text); }
+  .btn-sm.copied { background: #47ff96; border-color: #47ff96; color: #080810; }
+
+  /* ── Settings ── */
+  .settings-group { margin-bottom: 16px; }
+  .settings-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .settings-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .settings-input:focus { border-color: var(--accent); }
+  .settings-hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+
+  .btn-save {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    color: #080810;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-save:hover { box-shadow: 0 4px 16px rgba(232,255,71,0.3); }
+
+  .save-ok {
+    text-align: center;
+    font-size: 12px;
+    color: #47ff96;
+    margin-top: 8px;
+    display: none;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%) translateY(40px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0;
+    transition: all 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">WATCH<span>PARTY</span></div>
+  <div class="header-right">
+    <span class="badge none" id="count-badge">0 потоков</span>
+    <button class="icon-btn" id="clear-btn" title="Очистить список">🗑</button>  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" data-tab="streams">Потоки</button>
+  <button class="tab" data-tab="settings">Настройки</button>
+</div>
+
+<div class="panel active" id="tab-streams">
+  <div id="streams-empty" class="empty">
+    <div class="empty-icon">📡</div>
+    <div class="empty-title">Потоков не обнаружено</div>
+    <div class="empty-text">Откройте страницу с видео — расширение автоматически поймает поток</div>
+  </div>
+  <div class="stream-list" id="stream-list" style="display:none"></div>
+</div>
+
+<div class="panel" id="tab-settings">
+  <div class="settings-group">
+    <div class="settings-label">Адрес Watch Party сервера</div>
+    <input class="settings-input" id="server-url" type="text" placeholder="http://localhost:8000" />
+    <div class="settings-hint">Локальный или публичный адрес вашего Watch Party сервера (ngrok и т.д.)</div>
+  </div>
+  <button class="btn-save" id="save-btn">Сохранить</button>
+  <div class="save-ok" id="save-ok">✓ Сохранено</div>
+</div>
+
+<div id="toast"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>
