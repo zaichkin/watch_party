@@ -427,7 +427,7 @@
       <div class="viewers-dot"></div>
       <span id="viewers-count">1</span> зрителей
     </div>
-    <button class="share-btn" onclick="copyLink(this)">
+    <button class="share-btn" id="share-btn">
       <span>🔗</span> Поделиться
     </button>
   </div>
@@ -465,7 +465,7 @@
       <div class="room-id-display" id="room-id-display">——</div>
       <div class="room-link-row">
         <input class="room-link-input" id="room-link-input" readonly />
-        <button class="copy-link-btn" onclick="copyLink(null)">Копировать</button>
+        <button class="copy-link-btn" id="copy-link-btn">Копировать</button>
       </div>
     </div>
 
@@ -543,10 +543,21 @@ function setConnStatus(state, text) {
 
 function copyLink(btn) {
   navigator.clipboard.writeText(roomUrl).then(() => {
-    if (btn) { btn.textContent = '✓ Скопировано'; btn.classList.add('copied'); setTimeout(() => { btn.innerHTML = '<span>🔗</span> Поделиться'; btn.classList.remove('copied'); }, 2000); }
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.textContent = '✓ Скопировано';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+    }
     addEvent('📋', 'Ссылка скопирована в буфер обмена');
+  }).catch(() => {
+    // Fallback для браузеров без clipboard API
+    prompt('Скопируйте ссылку:', roomUrl);
   });
 }
+
+document.getElementById('share-btn').addEventListener('click', function() { copyLink(this); });
+document.getElementById('copy-link-btn').addEventListener('click', function() { copyLink(this); });
 
 // ── Video player ─────────────────────────────────────────────────────────────
 const video = document.getElementById('video');
@@ -773,9 +784,12 @@ let ws = null;
 let reconnectTimeout = null;
 
 function connect() {
+  // location.protocol будет 'https:' на ngrok — используем wss://
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/${roomId}`);
+  const wsUrl = proto + '://' + location.host + '/ws/' + roomId;
+  ws = new WebSocket(wsUrl);
   setConnStatus('connecting', 'Подключение...');
+  addEvent('🔌', 'WS: ' + wsUrl);
 
   ws.onopen = () => {
     setConnStatus('connected', 'Подключено');

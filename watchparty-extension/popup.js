@@ -73,8 +73,32 @@ function renderStreams() {
   });
 }
 
+// ── Копирование в буфер — работает прямо в popup ─────────────────────────────
+function copyToClipboard(text) {
+  // Способ 1: современный API (работает если popup в фокусе)
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+  }
+  // Способ 2: старый execCommand через textarea
+  return new Promise((resolve) => {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try {
+      const ok = document.execCommand('copy');
+      resolve(ok);
+    } catch {
+      resolve(false);
+    } finally {
+      document.body.removeChild(el);
+    }
+  });
+}
+
 // ── Отправка в Watch Party ────────────────────────────────────────────────────
-// fetch идёт через background service worker — у него нет ограничений CSP
 async function sendToWatchParty(index) {
   const stream = streams[index];
   if (!stream) return;
@@ -83,7 +107,7 @@ async function sendToWatchParty(index) {
 
   chrome.runtime.sendMessage(
     { type: 'CREATE_ROOM', streamUrl: stream.url },
-    (resp) => {
+    async (resp) => {
       if (chrome.runtime.lastError) {
         toast('❌ ' + chrome.runtime.lastError.message);
         return;
@@ -94,42 +118,38 @@ async function sendToWatchParty(index) {
       }
 
       const roomUrl = resp.roomUrl;
-
-      // Открываем комнату в новой вкладке
       chrome.tabs.create({ url: roomUrl });
 
-      // Копируем ссылку — делаем через background, там clipboard доступен иначе
-      // Fallback: показываем ссылку в toast чтобы можно было скопировать вручную
-      chrome.runtime.sendMessage({ type: 'COPY_TO_CLIPBOARD', text: roomUrl }, (r) => {
-        if (r?.ok) {
-          toast('✅ Комната создана! Ссылка скопирована.');
-        } else {
-          // Если clipboard не сработал — показываем ссылку в popup
-          toast('✅ Комната создана! Ссылка: ' + roomUrl, 6000);
-        }
-      });
+      const copied = await copyToClipboard(roomUrl);
+      if (copied) {
+        toast('✅ Комната создана! Ссылка скопирована.');
+      } else {
+        toast('✅ Готово! Ссылка: ' + roomUrl, 8000);
+      }
     }
   );
 }
 
 // ── Копирование URL потока ────────────────────────────────────────────────────
-function copyUrl(index, btn) {
+async function copyUrl(index, btn) {
   const stream = streams[index];
   if (!stream) return;
 
-  chrome.runtime.sendMessage({ type: 'COPY_TO_CLIPBOARD', text: stream.url }, (r) => {
-    if (r?.ok) {
-      btn.textContent = '✓ Скопировано';
-      btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = 'Копировать';
-        btn.classList.remove('copied');
-      }, 2000);
-    } else {
-      // Fallback — показываем url чтобы скопировать вручную
-      toast('Скопируйте вручную: ' + stream.url, 8000);
-    }
-  });
+  // Копируем оригинальный URL (rawUrl), а не embed
+  const textToCopy = stream.rawUrl || stream.url;
+  const copied = await copyToClipboard(textToCopy);
+
+  if (copied) {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Скопировано';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.classList.remove('copied');
+    }, 2000);
+  } else {
+    toast('Скопируйте вручную: ' + textToCopy, 8000);
+  }
 }
 
 // ── Очистка ───────────────────────────────────────────────────────────────────

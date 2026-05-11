@@ -212,14 +212,14 @@
       <input type="text" id="url-input" placeholder="https://example.com/stream.m3u8" />
     </div>
     <p class="error-msg" id="error-msg">Введите корректную ссылку на видеопоток</p>
-    <button class="btn" id="create-btn" onclick="createRoom()">Создать комнату</button>
+    <button class="btn" id="create-btn" >Создать комнату</button>
 
     <div class="examples">
       <div class="example-label">Попробовать</div>
       <div class="example-links">
-        <button class="example-chip" onclick="setExample('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">HLS Big Buck Bunny</button>
-        <button class="example-chip" onclick="setExample('https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8')">Apple HLS Demo</button>
-        <button class="example-chip" onclick="setExample('https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8')">Shaka Demo</button>
+        <button class="example-chip" data-url="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8">HLS Big Buck Bunny</button>
+        <button class="example-chip" data-url="https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8">Apple HLS Demo</button>
+        <button class="example-chip" data-url="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8">Shaka Demo</button>
       </div>
     </div>
   </div>
@@ -241,9 +241,11 @@
 </div>
 
 <script>
-function setExample(url) {
-  document.getElementById('url-input').value = url;
-}
+document.querySelectorAll('.example-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('url-input').value = btn.dataset.url;
+  });
+});
 
 async function createRoom() {
   const url = document.getElementById('url-input').value.trim();
@@ -263,7 +265,7 @@ async function createRoom() {
       body: JSON.stringify({ stream_url: url })
     });
     const data = await res.json();
-    window.location.href = `/room/${data.room_id}`;
+    window.location.href = '/room/' + data.room_id;
   } catch (e) {
     btn.textContent = 'СОЗДАТЬ КОМНАТУ';
     btn.classList.remove('loading');
@@ -272,6 +274,7 @@ async function createRoom() {
   }
 }
 
+document.getElementById('create-btn').addEventListener('click', createRoom);
 document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') createRoom();
 });

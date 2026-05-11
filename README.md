@@ -5,13 +5,18 @@
 ## Быстрый старт
 
 ```bash
-# 1. Установить зависимости
+# 1. Создать виртуальное окружение
+python3 -m venv venv
+
+source venv/bin/activate
+
+# 2. Установить зависимости
 pip install -r requirements.txt
 
-# 2. Запустить сервер
+# 3. Запустить сервер
 python server.py
 
-# 3. Открыть в браузере
+# 4. Открыть в браузере
 #    http://localhost:8000
 ```
 
@@ -30,6 +35,17 @@ python server.py
 | MP4 / WebM | ✅ нативный |
 | DASH | ⚠️ частично |
 
+## Что бы быстро получать видео поток с сайтов
+
+Необходимо установить расширение для бразуера
+
+```
+browser://extensions/
+```
+
+Загрузить распакованное расширение и указваем папку watch_party/watchparty-extension
+
+
 ## Архитектура
 
 ```
@@ -44,9 +60,16 @@ Browser ──WebSocket──► FastAPI Server
 
 ## Запуск с HTTPS (для Интернета)
 
-Для доступа из интернета используйте nginx как reverse proxy или ngrok:
+Для доступа из интернета используйте [tuna](https://tuna.am/) или [ngrok](https://ngrok.com/):
 
 ```bash
 # Быстро открыть для друзей через ngrok:
 ngrok http 8000
+
+```
+
+```bash
+# Быстро открыть для друзей через tuna:
+tuna http 8000
+
 ```

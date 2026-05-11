@@ -30,6 +30,13 @@ log = logging.getLogger("watchparty")
 
 app = FastAPI()
 
+@app.middleware("http")
+async def add_ngrok_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["ngrok-skip-browser-warning"] = "1"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
 # ── Данные ─────────────────────────────────────────────────────────────────────
 
 class Room:
@@ -132,6 +139,26 @@ async def websocket_endpoint(ws: WebSocket, room_id: str):
                 room.last_sync = time.time()
                 log.info(f"[{room_id}] SEEK  t={room.current_time:.1f}s")
                 await broadcast(room, {"type": "seek", "current_time": room.current_time}, exclude=ws)
+
+            elif msg_type == "join":
+                name = str(data.get("name", "Зритель"))[:50]
+                log.info(f"[{room_id}] JOIN name={name}")
+                await broadcast(room, {
+                    "type": "join",
+                    "text": f"{name} присоединился к просмотру"
+                }, exclude=ws)
+
+            elif msg_type == "chat":
+                name = str(data.get("name", "Зритель"))[:50]
+                text = str(data.get("text", ""))[:300].strip()
+                if text:
+                    log.info(f"[{room_id}] CHAT {name}: {text[:40]}")
+                    await broadcast(room, {
+                        "type": "chat",
+                        "name": name,
+                        "text": text,
+                        "time": data.get("time", int(time.time() * 1000))
+                    }, exclude=ws)
 
             elif msg_type == "ping":
                 await ws.send_json({"type": "pong"})
