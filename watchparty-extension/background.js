@@ -156,6 +156,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'YT_SYNC' && tabId) {
+    // Пересылаем событие YouTube плеера на сервер через WebSocket комнаты
+    // background не знает room_id — шлём в popup через NEW_STREAM
+    // Реальная синхронизация идёт через WebSocket в room.html
+    return;
+  }
+
   if (msg.type === 'STREAM_FOUND' && tabId) {
     const { url } = msg;
     if (url.startsWith('youtube:') || isStream(url) || /\.(mp4|webm)/i.test(url)) {

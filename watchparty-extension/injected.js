@@ -151,3 +151,61 @@
   }, 1000);
 
 })();
+
+// ── YouTube Player sync (yt_sync режим) ──────────────────────────────────────
+// Хукаем нативный YouTube плеер через ytInitialPlayerResponse и HTMLVideoElement
+(function () {
+  if (!location.hostname.includes('youtube.com')) return;
+
+  let lastState = null;
+  let lastTime = 0;
+
+  const report = (event, video) => {
+    const currentTime = video ? video.currentTime : 0;
+    const videoId = (location.href.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || [])[1];
+    window.dispatchEvent(new CustomEvent('__ytPlayerEvent', {
+      detail: { event, currentTime, videoId }
+    }));
+  };
+
+  // Ждём появления video элемента YouTube
+  const hookVideo = (video) => {
+    if (video.__wpHooked) return;
+    video.__wpHooked = true;
+
+    video.addEventListener('play', () => {
+      if (lastState === 'play') return;
+      lastState = 'play';
+      report('play', video);
+    });
+
+    video.addEventListener('pause', () => {
+      if (lastState === 'pause') return;
+      lastState = 'pause';
+      report('pause', video);
+    });
+
+    video.addEventListener('seeked', () => {
+      if (Math.abs(video.currentTime - lastTime) < 1) return;
+      lastTime = video.currentTime;
+      report('seek', video);
+    });
+  };
+
+  // Слушаем команды от content.js
+  window.addEventListener('__ytSyncCmd', (e) => {
+    const video = document.querySelector('video');
+    if (!video) return;
+    const { event, currentTime } = e.detail || {};
+    if (event === 'play') video.play().catch(() => {});
+    if (event === 'pause') video.pause();
+    if (event === 'seek' && currentTime !== undefined) video.currentTime = currentTime;
+  });
+
+  // Сканируем video элементы
+  const scan = () => {
+    document.querySelectorAll('video').forEach(hookVideo);
+  };
+  scan();
+  new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });
+})();

@@ -11,11 +11,16 @@
 
   // ── Слушаем потоки от injected.js ─────────────────────────────────────────
   const seen = new Set();
+  const safeSend = (msg) => {
+    if (!chrome.runtime?.id) return;
+    chrome.runtime.sendMessage(msg).catch(() => {});
+  };
+
   window.addEventListener('__watchPartyStream', (e) => {
     const url = e.detail?.url;
     if (!url || seen.has(url)) return;
     seen.add(url);
-    chrome.runtime.sendMessage({ type: 'STREAM_FOUND', url }).catch(() => {});
+    safeSend({ type: 'STREAM_FOUND', url });
   });
 
   // ── YouTube ────────────────────────────────────────────────────────────────
@@ -32,33 +37,41 @@
       const id = getYouTubeVideoId();
       if (!id) return;
       const title = document.title.replace(' - YouTube', '').trim();
-      chrome.runtime.sendMessage({
-        type: 'YT_PAGE',
-        videoId: id,
-        url: location.href,
-        title: title || 'YouTube видео',
-      }).catch(() => {});
+      safeSend({ type: 'YT_PAGE', videoId: id, url: location.href, title: title || 'YouTube видео' });
       const embedUrl = 'youtube:' + id;
       if (!seen.has(embedUrl)) {
         seen.add(embedUrl);
-        chrome.runtime.sendMessage({ type: 'STREAM_FOUND', url: embedUrl }).catch(() => {});
+        safeSend({ type: 'STREAM_FOUND', url: embedUrl });
       }
     };
 
     reportYouTubePage();
+
+    // ── Синхронизация YouTube плеера ─────────────────────────────────────────
+    window.addEventListener('__ytPlayerEvent', (e) => {
+      if (!chrome.runtime?.id) return;
+      const { event, currentTime, videoId } = e.detail || {};
+      safeSend({ type: 'YT_SYNC', event, currentTime, videoId });
+    });
+
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === 'YT_SYNC_CMD') {
+        window.dispatchEvent(new CustomEvent('__ytSyncCmd', { detail: msg }));
+      }
+    });
+
     let lastHref = location.href;
     setInterval(() => {
-      if (!chrome.runtime?.id) return; // контекст расширения недоступен
+      if (!chrome.runtime?.id) return;
       if (location.href !== lastHref) {
         lastHref = location.href;
         seen.clear();
         reportYouTubePage();
       }
-      // Название обновляется позже URL — шлём каждую секунду
       const id = getYouTubeVideoId();
       if (id) {
         const title = document.title.replace(' - YouTube', '').trim();
-        if (title) chrome.runtime.sendMessage({ type: 'YT_PAGE', videoId: id, url: location.href, title }).catch(() => {});
+        if (title) safeSend({ type: 'YT_PAGE', videoId: id, url: location.href, title });
       }
     }, 1000);
   }

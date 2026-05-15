@@ -45,7 +45,8 @@ class Room:
     def __init__(self, room_id: str, stream_url: str):
         self.room_id = room_id
         self.stream_url = stream_url
-        self.player_type: str = "hls"  # 'hls' | 'iframe'
+        self.player_type: str = "hls"  # 'hls' | 'iframe' | 'yt_sync'
+        self.youtube_video_id: str = ""
         self.connections: Set[WebSocket] = set()
         self.is_playing: bool = False
         self.current_time: float = 0.0
@@ -57,6 +58,7 @@ class Room:
             "type": "state",
             "stream_url": self.stream_url,
             "player_type": self.player_type,
+            "youtube_video_id": self.youtube_video_id,
             "is_playing": self.is_playing,
             "current_time": self.current_time + elapsed,
         }
@@ -136,7 +138,7 @@ async def proxy_player(url: str):
 <body><iframe src="{url}" style="width:100%;height:100vh;border:none"
 allowfullscreen allow="autoplay;fullscreen"></iframe></body></html>''')
 
-def resolve_stream_url(url: str) -> tuple[str, str]:
+def resolve_stream_url(url: str) -> tuple[str, str, str]:
     """
     Возвращает (player_url, player_type).
     player_type: 'iframe' | 'hls'
@@ -153,30 +155,30 @@ def resolve_stream_url(url: str) -> tuple[str, str]:
         kp_id = kp.group(1)
         embed_url = f"https://fbdomen.cfd/film/{kp_id}/"
         log.info(f"Kinopoisk ID {kp_id} → proxy → {embed_url}")
-        return via_proxy(embed_url), "iframe"
+        return via_proxy(embed_url), "iframe", ""
 
     # Прямая ссылка на fbdomen / bazon / videocdn — тоже через прокси
     if "fbdomen" in url or "bazon" in url or "videocdn" in url:
-        return via_proxy(url), "iframe"
+        return via_proxy(url), "iframe", ""
 
     # YouTube embed — без прокси (нельзя проксировать)
     if url.startswith("https://www.youtube.com/embed/"):
-        return url, "iframe"
+        vid = re.search(r'/embed/([a-zA-Z0-9_-]{11})', url)
+        return url, "yt_sync", vid.group(1) if vid else ""
 
     # YouTube watch: youtube.com/watch?v=ID
     yt_watch = re.search(r'youtube\.com/watch\?.*v=([a-zA-Z0-9_-]{11})', url)
     if yt_watch:
         vid = yt_watch.group(1)
-        return f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1", "iframe"
+        return f"https://www.youtube.com/watch?v={vid}", "yt_sync", vid
 
     # youtube:VIDEO_ID — от расширения
     if url.startswith('youtube:'):
-        vid = url[8:19]  # ровно 11 символов ID
-        return f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1", "iframe"
-        return url, "iframe"
+        vid = url[8:19]
+        return f"https://www.youtube.com/watch?v={vid}", "yt_sync", vid
 
     # Всё остальное — HLS/MP4 поток
-    return url, "hls"
+    return url, "hls", ""
 
 @app.post("/create")
 async def create_room(data: dict):
@@ -184,10 +186,11 @@ async def create_room(data: dict):
     if not raw_url:
         raise HTTPException(status_code=400, detail="stream_url is required")
 
-    player_url, player_type = resolve_stream_url(raw_url)
+    player_url, player_type, video_id = resolve_stream_url(raw_url)
     room_id = uuid.uuid4().hex[:8]
     room = Room(room_id, player_url)
-    room.player_type = player_type  # 'hls' или 'iframe'
+    room.player_type = player_type
+    room.youtube_video_id = video_id
     rooms[room_id] = room
     log.info(f"Room created: {room_id}  type={player_type}  url={player_url[:80]}")
     return {"room_id": room_id}
