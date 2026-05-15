@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Watch Party — Stream Catcher",
-  "version": "2.0",
-  "description": "Перехватывает видеопотоки на странице и отправляет в Watch Party",
+  "version": "2.1",
+  "description": "Перехватывает видеопотоки и добавляет Watch Party на Кинопоиск",
   "permissions": [
     "webRequest",
     "activeTab",
@@ -23,6 +23,19 @@
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.kinopoisk.ru/film/*",
+        "https://www.kinopoisk.ru/series/*",
+        "https://www.kinopoisk.ru/show/*",
+        "https://kinopoisk.ru/film/*",
+        "https://kinopoisk.ru/series/*",
+        "https://kinopoisk.ru/show/*"
+      ],
+      "js": ["kinopoisk.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [

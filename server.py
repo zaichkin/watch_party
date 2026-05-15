@@ -1,12 +1,14 @@
 import uuid
 import time
+import re
 import traceback
 import logging
 from pathlib import Path
 from typing import Dict, Set, Optional
 
+import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 import uvicorn
 
 # ── Пути ──────────────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ class Room:
     def __init__(self, room_id: str, stream_url: str):
         self.room_id = room_id
         self.stream_url = stream_url
+        self.player_type: str = "hls"  # 'hls' | 'iframe'
         self.connections: Set[WebSocket] = set()
         self.is_playing: bool = False
         self.current_time: float = 0.0
@@ -53,6 +56,7 @@ class Room:
         return {
             "type": "state",
             "stream_url": self.stream_url,
+            "player_type": self.player_type,
             "is_playing": self.is_playing,
             "current_time": self.current_time + elapsed,
         }
@@ -78,21 +82,145 @@ async def broadcast(room: Room, message: dict, exclude: Optional[WebSocket] = No
 async def index():
     return HTMLResponse(read_template("index.html"))
 
+# ── Прокси для iframe-плеера ───────────────────────────────────────────────────
+# Скачиваем HTML плеера на сервере, чистим ненужные элементы,
+# отдаём с нашего домена → браузер считает same-origin → JS имеет доступ
+
+ELEMENTS_TO_REMOVE = [
+    'tgWrapper', 'topAdPad', 'adPad', 'bannerAd',
+    'top-ad', 'bottom-ad', 'ad-banner', 'tg-wrapper',
+]
+
+async def fetch_and_clean_player(url: str) -> str:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.kinopoisk.ru/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        html = resp.text
+
+    # Удаляем элементы по id и классу через regex
+    for elem_id in ELEMENTS_TO_REMOVE:
+        # <div id="tgWrapper"...>...</div> — убираем через display:none в style
+        html = re.sub(
+            r'(<[^>]+(?:id|class)=["\'][^"\']*' + re.escape(elem_id) + r'[^"\']*["\'][^>]*)(>)',
+            r'\1 style="display:none!important"\2',
+            html, flags=re.IGNORECASE
+        )
+
+    # Фиксируем относительные URL ресурсов (src="/...", href="/...")
+    base = '/'.join(url.split('/')[:3])  # https://fbdomen.cfd
+    html = re.sub(r'(src|href)=(["\'])/(?!/)', lambda m: f'{m.group(1)}={m.group(2)}{base}/', html)
+
+    return html
+
+@app.get("/proxy/player")
+async def proxy_player(url: str):
+    """Прокси для iframe-плеера — возвращает очищенный HTML."""
+    if not url.startswith('http'):
+        raise HTTPException(400, "Invalid URL")
+    try:
+        html = await fetch_and_clean_player(url)
+        return HTMLResponse(html, headers={
+            "X-Frame-Options": "SAMEORIGIN",
+            "Content-Security-Policy": "frame-ancestors 'self'",
+        })
+    except Exception as e:
+        log.error(f"Proxy error for {url}: {e}")
+        # Fallback — отдаём прямой iframe если прокси не сработал
+        return HTMLResponse(f'''<!DOCTYPE html><html><head>
+<style>*{{margin:0;padding:0}}body{{overflow:hidden}}</style></head>
+<body><iframe src="{url}" style="width:100%;height:100vh;border:none"
+allowfullscreen allow="autoplay;fullscreen"></iframe></body></html>''')
+
+def resolve_stream_url(url: str) -> tuple[str, str]:
+    """
+    Возвращает (player_url, player_type).
+    player_type: 'iframe' | 'hls'
+    Если это ссылка Кинопоиска — конвертируем в fbdomen, затем через прокси.
+    """
+    from urllib.parse import quote
+
+    def via_proxy(player_url: str) -> str:
+        return "/proxy/player?url=" + quote(player_url, safe='')
+
+    # Кинопоиск: kinopoisk.ru/film/123456/ или kinopoisk.ru/series/123456/
+    kp = re.search(r'kinopoisk\.ru/(?:film|series|show)/(\d+)', url)
+    if kp:
+        kp_id = kp.group(1)
+        embed_url = f"https://fbdomen.cfd/film/{kp_id}/"
+        log.info(f"Kinopoisk ID {kp_id} → proxy → {embed_url}")
+        return via_proxy(embed_url), "iframe"
+
+    # Прямая ссылка на fbdomen / bazon / videocdn — тоже через прокси
+    if "fbdomen" in url or "bazon" in url or "videocdn" in url:
+        return via_proxy(url), "iframe"
+
+    # YouTube embed — без прокси (нельзя проксировать)
+    if url.startswith("https://www.youtube.com/embed/"):
+        return url, "iframe"
+
+    # YouTube watch: youtube.com/watch?v=ID
+    yt_watch = re.search(r'youtube\.com/watch\?.*v=([a-zA-Z0-9_-]{11})', url)
+    if yt_watch:
+        vid = yt_watch.group(1)
+        return f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1", "iframe"
+
+    # youtube:VIDEO_ID — от расширения
+    if url.startswith('youtube:'):
+        vid = url[8:19]  # ровно 11 символов ID
+        return f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1", "iframe"
+        return url, "iframe"
+
+    # Всё остальное — HLS/MP4 поток
+    return url, "hls"
+
 @app.post("/create")
 async def create_room(data: dict):
-    stream_url = (data.get("stream_url") or "").strip()
-    if not stream_url:
+    raw_url = (data.get("stream_url") or "").strip()
+    if not raw_url:
         raise HTTPException(status_code=400, detail="stream_url is required")
+
+    player_url, player_type = resolve_stream_url(raw_url)
     room_id = uuid.uuid4().hex[:8]
-    rooms[room_id] = Room(room_id, stream_url)
-    log.info(f"Room created: {room_id}  url={stream_url[:80]}")
+    room = Room(room_id, player_url)
+    room.player_type = player_type  # 'hls' или 'iframe'
+    rooms[room_id] = room
+    log.info(f"Room created: {room_id}  type={player_type}  url={player_url[:80]}")
     return {"room_id": room_id}
 
 @app.get("/room/{room_id}", response_class=HTMLResponse)
 async def room_page(room_id: str):
     if room_id not in rooms:
         log.warning(f"Room not found: {room_id}")
-        return RedirectResponse("/")
+        return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Комната не найдена</title>
+<style>
+  body {{ background:#080810; color:#e8e8f0; font-family:sans-serif;
+         display:flex; align-items:center; justify-content:center;
+         min-height:100vh; margin:0; flex-direction:column; gap:16px; text-align:center; }}
+  .logo {{ font-size:48px; font-weight:900; letter-spacing:2px; }}
+  .logo span {{ color:#e8ff47; }}
+  h2 {{ color:#ff4f7b; margin:0; }}
+  p {{ color:#6a6a80; max-width:360px; line-height:1.6; }}
+  a {{ color:#e8ff47; }}
+</style>
+</head>
+<body>
+  <div class="logo">WATCH<span>PARTY</span></div>
+  <h2>Комната не найдена</h2>
+  <p>Комната <b>{room_id}</b> не существует или сервер был перезапущен.<br>
+  Попросите хоста создать новую комнату.</p>
+  <a href="/">← На главную</a>
+</body>
+</html>""", status_code=404)
     return HTMLResponse(read_template("room.html", ROOM_ID=room_id))
 
 # ── WebSocket ──────────────────────────────────────────────────────────────────

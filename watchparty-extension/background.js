@@ -104,6 +104,12 @@ function updateBadge(tabId, count) {
   try { chrome.action.setBadgeTextColor({ color: '#080810', tabId }); } catch {}
 }
 
+// tabId → { kinopoiskId, kinopoiskType, url, title }
+const kpPageByTab = {};
+
+// tabId → { videoId, url, title }
+const ytPageByTab = {};
+
 // ── 1. webRequest — ловит сетевые запросы ─────────────────────────────────────
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -120,6 +126,35 @@ chrome.webRequest.onBeforeRequest.addListener(
 // ── 2. Сообщения ───────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
+
+  if (msg.type === 'KP_PAGE' && tabId) {
+    kpPageByTab[tabId] = {
+      kinopoiskId: msg.kinopoiskId,
+      kinopoiskType: msg.kinopoiskType,
+      url: msg.url,
+      title: msg.title,
+    };
+    return;
+  }
+
+  if (msg.type === 'GET_KP_PAGE') {
+    sendResponse(kpPageByTab[msg.tabId] || null);
+    return true;
+  }
+
+  if (msg.type === 'YT_PAGE' && tabId) {
+    ytPageByTab[tabId] = {
+      videoId: msg.videoId,
+      url: msg.url,
+      title: msg.title,
+    };
+    return;
+  }
+
+  if (msg.type === 'GET_YT_PAGE') {
+    sendResponse(ytPageByTab[msg.tabId] || null);
+    return true;
+  }
 
   if (msg.type === 'STREAM_FOUND' && tabId) {
     const { url } = msg;
@@ -196,10 +231,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId === 0) {
     delete streamsByTab[details.tabId];
+    delete kpPageByTab[details.tabId];
     try { chrome.action.setBadgeText({ text: '', tabId: details.tabId }); } catch {}
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete streamsByTab[tabId];
+  delete kpPageByTab[tabId];
 });
